@@ -16,6 +16,7 @@ static inline int __mutex_lock_interruptible_sparse(struct mutex *lock)
 }
 
 static inline void __mutex_lock_sparse(struct mutex *lock)
+	__acquires(lock)
 {
 	__acquire(lock);
 	mutex_lock(lock);
