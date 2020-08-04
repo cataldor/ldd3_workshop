@@ -22,5 +22,6 @@ The following changes were made:
 * Use of dynamic debugging (`dyndbg`) for printing;
 * Procedure `scull_meminfo`;
 * Implemented 'proper' FIFO behavior for pipe nr `PROPER_FIFO_BEH_IDX`;
+* Support for the semantic parser sparse.
 
 [1]: https://github.com/martinezjavier/ldd3

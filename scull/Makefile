@@ -15,7 +15,7 @@ else
 	PWD := $(shell pwd)
 
 default:
-	$(MAKE) -C $(KERNELDIR) M=$(PWD) W=1 modules
+	$(MAKE) -C $(KERNELDIR) M=$(PWD) C=1 W=1 modules
 
 clean:
 	rm $(PROGNAME).ko $(PROGNAME).mod $(PROGNAME).mod.c $(PROGNAME).mod.o $(PROGNAME).o Module.symvers modules.order

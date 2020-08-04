@@ -2,6 +2,7 @@
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 
+#include "mutex_sparse.h"
 #include "scull.h"
 
 static void *scull_seq_start(struct seq_file *s, loff_t *pos)
@@ -42,7 +43,7 @@ static int scull_seq_show(struct seq_file *s, void *v)
 	const 	struct scull_qset 	*qset;
 	size_t 	i;
 
-	if (mutex_lock_interruptible(&dev->lock))
+	if (__mutex_lock_interruptible_sparse(&dev->lock))
 		return(-ERESTARTSYS);
 	seq_printf(s, "\ndevice %zu: qset %zu, q %zu, sz %zu\n",
 			(size_t) (dev - scull_devices), dev->qset_len,
@@ -61,7 +62,7 @@ static int scull_seq_show(struct seq_file *s, void *v)
 				}
 			}
 	}
-	mutex_unlock(&dev->lock);
+	__mutex_unlock_sparse(&dev->lock);
 	return (0);
 }
 

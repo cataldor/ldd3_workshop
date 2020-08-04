@@ -11,12 +11,13 @@
 #include <linux/fcntl.h>
 
 #include "ioctl.h"
+#include "mutex_sparse.h"
 #include "pipe.h"
 #include "proc.h"
 #include "scull.h"
 
 int 	scull_major = SCULL_MAJOR;
-int 	scull_minor = 0;
+static int 	scull_minor = 0;
 ulong 	scull_nr_devs = SCULL_NR_DEVS;
 ulong	scull_quantum = SCULL_QUANTUM;
 ulong	scull_qset = SCULL_QSET;
@@ -31,7 +32,7 @@ MODULE_AUTHOR("Alessandro Rubini, Jonathan Corbet");
 MODULE_LICENSE("Dual BSD/GPL");
 
 struct scull_dev *scull_devices;	/* allocated in scull_init_module */
-struct file_operations scull_fops = {
+static struct file_operations scull_fops = {
 	.owner =    THIS_MODULE,
 	/*.llseek =   scull_llseek,*/
 	.read =     scull_read,
@@ -45,6 +46,7 @@ struct file_operations scull_fops = {
  * empty out scull device -> must be called with the device mutex held
  */
 static void __scull_trim(struct scull_dev *dev) 
+	__must_hold(&dev->lock)
 {
 	struct 	scull_qset	*qset, *next;
 	size_t	i;
@@ -76,10 +78,10 @@ int scull_open(struct inode *inode, struct file *filp)
 
 	/* is it write only? then trim it */
 	if ((filp->f_flags & O_ACCMODE) == O_WRONLY) {
-		if (mutex_lock_interruptible(&dev->lock))
+		if (__mutex_lock_interruptible_sparse(&dev->lock))
 			return (-ERESTARTSYS);
 		__scull_trim(dev);
-		mutex_unlock(&dev->lock);
+		__mutex_unlock_sparse(&dev->lock);
 	}
 	return (0);
 }
@@ -92,6 +94,7 @@ int scull_release(struct inode *inode, struct file *filp)
 
 static struct scull_qset *__scull_follow(struct scull_dev *dev, 
 		struct scull_follow *flw, const loff_t *f_pos)
+	__must_hold(&dev->lock)
 {
 	const 	size_t 	total_len = dev->quantum_len * dev->qset_len;
 	const 	size_t	rest = *f_pos % total_len;
@@ -159,7 +162,7 @@ ssize_t scull_read(struct file *filp, char __user *buf, size_t count,
 	struct	scull_follow	flw;
 	ssize_t	ssret = 0;
 
-	if (mutex_lock_interruptible(&dev->lock))
+	if (__mutex_lock_interruptible_sparse(&dev->lock))
 		return(-ERESTARTSYS);
 
 	if (*f_pos >= dev->len)
@@ -184,7 +187,7 @@ ssize_t scull_read(struct file *filp, char __user *buf, size_t count,
 	ssret = count;
 out:
 	__scull_meminfo(dev);
-	mutex_unlock(&dev->lock);
+	__mutex_unlock_sparse(&dev->lock);
 	return (ssret);
 }
 
@@ -196,7 +199,7 @@ ssize_t scull_write(struct file *filp, const char __user *buf, size_t count,
 	struct	scull_follow	flw;
 	ssize_t ssret = -ENOMEM;
 
-	if (mutex_lock_interruptible(&dev->lock))
+	if (__mutex_lock_interruptible_sparse(&dev->lock))
 		return (-ERESTARTSYS);
 
 	qset = __scull_follow(dev, &flw, f_pos);
@@ -234,7 +237,7 @@ ssize_t scull_write(struct file *filp, const char __user *buf, size_t count,
 
 out:
 	__scull_meminfo(dev);
-	mutex_unlock(&dev->lock);
+	__mutex_unlock_sparse(&dev->lock);
 	return (ssret);
 }
 
@@ -249,9 +252,9 @@ void scull_cleanup_module(void)
 	for (i = 0; i < scull_nr_devs; i++) {
 		struct scull_dev *dev = &scull_devices[i];
 
-		mutex_lock(&dev->lock);	
+		__mutex_lock_sparse(&dev->lock);
 		__scull_trim(dev);
-		mutex_unlock(&dev->lock);
+		__mutex_unlock_sparse(&dev->lock);
 		cdev_del(&dev->cdev);
 	}
 	kfree(scull_devices);
@@ -262,7 +265,6 @@ final:
 	scull_p_cleanup();
 	/*scull_access_cleanup();*/
 	pr_debug("offline\n");
-
 }
 
 static void scull_setup_cdev(struct scull_dev *dev, size_t i)

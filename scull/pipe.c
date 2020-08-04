@@ -6,6 +6,7 @@
 #include <linux/slab.h>
 
 #include "ioctl.h"
+#include "mutex_sparse.h"
 #include "scull.h"		/* local definitions */
 #include "pipe.h"
 
@@ -21,27 +22,28 @@ static struct scull_pipe *scull_p_devices;
 static int scull_p_fasync(int fd, struct file *filp, int mode);
 static size_t spacefree(struct scull_pipe *dev);
 
+
 static int scull_p_proper_open(struct scull_pipe *dev, struct inode *inode,
 	       	struct file *filp)
 {
 
-	if (mutex_lock_interruptible(&dev->lock))
+	if (__mutex_lock_interruptible_sparse(&dev->lock))
 		return (-ERESTARTSYS);
 
 	if (filp->f_mode & FMODE_READ) {
 		if (filp->f_flags & O_NONBLOCK && dev->writers == 0) {
-			mutex_unlock(&dev->lock);
+			__mutex_unlock_sparse(&dev->lock);
 			return (-EAGAIN);
 		}
 
 		dev->readers++;
 		while (dev->writers == 0) {
-			mutex_unlock(&dev->lock);
+			__mutex_unlock_sparse(&dev->lock);
 			pr_notice("%s waiting for writers\n", current->comm);
 			if (wait_event_interruptible(dev->openq, 
 			    dev->writers > 0))
 				return (-ERESTARTSYS);
-			if (mutex_lock_interruptible(&dev->lock))
+			if (__mutex_lock_interruptible_sparse(&dev->lock))
 				return (-ERESTARTSYS);
 		}
 	} else {
@@ -49,7 +51,7 @@ static int scull_p_proper_open(struct scull_pipe *dev, struct inode *inode,
 		if (dev->buf == NULL) {
 			dev->buf = kmalloc(scull_p_len, GFP_KERNEL);
 			if (dev->buf == NULL) {
-				mutex_unlock(&dev->lock);
+				__mutex_unlock_sparse(&dev->lock);
 				return (-ENOMEM);
 			}
 		}
@@ -60,7 +62,7 @@ static int scull_p_proper_open(struct scull_pipe *dev, struct inode *inode,
 		if (dev->readers != 0)
 			wake_up_interruptible_sync(&dev->openq);
 	}
-	mutex_unlock(&dev->lock);
+	__mutex_unlock_sparse(&dev->lock);
 	return (nonseekable_open(inode, filp));
 
 }
@@ -77,13 +79,13 @@ static int scull_p_open(struct inode *inode, struct file *filp)
 		return (scull_p_proper_open(dev, inode, filp));
 	}
 
-	if (mutex_lock_interruptible(&dev->lock))
+	if (__mutex_lock_interruptible_sparse(&dev->lock))
 		return(-ERESTARTSYS);
 
 	if (dev->buf == NULL) {
 		dev->buf = kmalloc(scull_p_len, GFP_KERNEL);
 		if (dev->buf == NULL) {
-			mutex_unlock(&dev->lock);
+			__mutex_unlock_sparse(&dev->lock);
 			return (-ENOMEM);
 		}
 	}
@@ -97,7 +99,7 @@ static int scull_p_open(struct inode *inode, struct file *filp)
 	if (filp->f_mode & FMODE_WRITE)
 		dev->writers++;
 
-	mutex_unlock(&dev->lock);
+	__mutex_unlock_sparse(&dev->lock);
 	return (nonseekable_open(inode, filp));
 }
 
@@ -107,7 +109,7 @@ static int scull_p_release(struct inode *inode, struct file *filp)
 
 	/* remove this filp from the async notified filps */
 	(void)scull_p_fasync(-1, filp, 0);
-	if (mutex_lock_interruptible(&dev->lock))
+	if (__mutex_lock_interruptible_sparse(&dev->lock))
 		return (-ERESTARTSYS);
 
 	if (filp->f_mode & FMODE_READ)
@@ -118,12 +120,15 @@ static int scull_p_release(struct inode *inode, struct file *filp)
 		kfree(dev->buf);
 		dev->buf = NULL;
 	}
-	mutex_unlock(&dev->lock);
+	__mutex_unlock_sparse(&dev->lock);
 	return (0);
 }
 
 static size_t spacefree(struct scull_pipe *dev)
+	__must_hold(&dev->lock)
 {
+
+	lockdep_assert_held(&dev->lock);
 	if (dev->rp == dev->wp)
 		return (dev->buf_len - 1);
 	return (((dev->rp + dev->buf_len - dev->wp) % dev->buf_len) - 1);
@@ -141,7 +146,7 @@ static ssize_t scull_p_read(struct file *filp, char __user *buf, size_t count,
 {
 	struct scull_pipe *dev = filp->private_data;
 
-	if (mutex_lock_interruptible(&dev->lock))
+	if (__mutex_lock_interruptible_sparse(&dev->lock))
 		return (-ERESTARTSYS);
 
 	pr_debug(KERN_NOTICE "%s %lu %lu\n", current->comm, dev->rp - dev->buf,
@@ -149,19 +154,19 @@ static ssize_t scull_p_read(struct file *filp, char __user *buf, size_t count,
 
 	if (dev->idx == PROPER_FIFO_BEH_IDX) {
 		if (dev->rp == dev->wp && dev->writers == 0) {
-			mutex_unlock(&dev->lock);
+			__mutex_unlock_sparse(&dev->lock);
 			return (0);
 		}
 	}
 	while (dev->rp == dev->wp) {
-		mutex_unlock(&dev->lock);
+		__mutex_unlock_sparse(&dev->lock);
 		if (filp->f_flags & O_NONBLOCK)
 			return (-EAGAIN);
 		pr_notice("%s going to sleep r%zd w%zd\n", 
 				current->comm, dev->readers, dev->writers);
 		if (wait_event_interruptible(dev->inq, (dev->rp != dev->wp)))
 			return (-ERESTARTSYS);
-		if (mutex_lock_interruptible(&dev->lock))
+		if (__mutex_lock_interruptible_sparse(&dev->lock))
 			return (-ERESTARTSYS);
 	}
 	/* ok data available */
@@ -172,13 +177,13 @@ static ssize_t scull_p_read(struct file *filp, char __user *buf, size_t count,
 		count = min(count, (size_t)(dev->end - dev->rp));
 
 	if (copy_to_user(buf, dev->rp, count)) {
-		mutex_unlock(&dev->lock);
+		__mutex_unlock_sparse(&dev->lock);
 		return (-EFAULT);
 	}
 	dev->rp += count;
 	if (dev->rp == dev->end)
 		dev->rp = dev->buf;
-	mutex_unlock(&dev->lock);
+	__mutex_unlock_sparse(&dev->lock);
 	/* awake any writers */
 	wake_up_interruptible(&dev->outq);
 	pr_notice("%s did read %zu bytes\n", current->comm, count);
@@ -193,10 +198,12 @@ static int scull_getwritespace(struct scull_pipe *dev, struct file *filp)
 	pr_notice("%s %lu %lu\n", current->comm, dev->rp - dev->buf,
 	    dev->wp - dev->buf);
 	lockdep_assert_held(&dev->lock);
+	__acquire(&dev->lock);
+
 	while (spacefree(dev) == 0) {
 		DEFINE_WAIT(wait);
 
-		mutex_unlock(&dev->lock);
+		__mutex_unlock_sparse(&dev->lock);
 		if (filp->f_flags & O_NONBLOCK)
 			return (-EAGAIN);
 
@@ -209,9 +216,10 @@ static int scull_getwritespace(struct scull_pipe *dev, struct file *filp)
 		finish_wait(&dev->outq, &wait);
 		if (signal_pending(current))
 			return (-ERESTARTSYS);
-		if (mutex_lock_interruptible(&dev->lock))
+		if (__mutex_lock_interruptible_sparse(&dev->lock))
 			return (-ERESTARTSYS);
 	}
+	__release(&dev->lock);
 	return (0);
 }
 
@@ -221,12 +229,16 @@ static ssize_t scull_p_write(struct file *filp, const char __user *buf,
 	struct scull_pipe	*dev = filp->private_data;
 	int ret;
 
-	if (mutex_lock_interruptible(&dev->lock))
+	if (__mutex_lock_interruptible_sparse(&dev->lock))
 		return (-ERESTARTSYS);
 
+	/* releases lock if it fails */
 	ret = scull_getwritespace(dev, filp);
-	if (ret)
-		return(ret);
+	if (ret) {
+		/* make sparse happy */
+		__release(&dev->lock);
+		return (ret);
+	}
 
 	count = min(count, (size_t)spacefree(dev));
 	if (dev->wp >= dev->rp)
@@ -234,14 +246,14 @@ static ssize_t scull_p_write(struct file *filp, const char __user *buf,
 	else
 		count = min(count, (size_t)(dev->rp - dev->wp - 1));
 	if  (copy_from_user(dev->wp, buf, count)) {
-		mutex_unlock(&dev->lock);
+		__mutex_unlock_sparse(&dev->lock);
 		return (-EFAULT);
 	}
 	dev->wp += count;
 	if (dev->wp == dev->end)
 		dev->wp = dev->buf;
 
-	mutex_unlock(&dev->lock);
+	__mutex_unlock_sparse(&dev->lock);
 	wake_up_interruptible(&dev->inq);
 
 	if (dev->async_q != NULL)
@@ -250,18 +262,18 @@ static ssize_t scull_p_write(struct file *filp, const char __user *buf,
 	return (count);
 }
 
-static unsigned int scull_p_poll(struct file *filp, poll_table *wait)
+static __poll_t scull_p_poll(struct file *filp, poll_table *wait)
 {
 	struct scull_pipe *dev = filp->private_data;
-	unsigned int mask = 0;
+	__poll_t mask = 0;
 
-	mutex_lock(&dev->lock);
+	__mutex_lock_sparse(&dev->lock);
 	poll_wait(filp, &dev->inq, wait);
 	poll_wait(filp, &dev->outq, wait);
 
 	if (dev->idx == PROPER_FIFO_BEH_IDX && dev->writers == 0) {
-		mutex_unlock(&dev->lock);
-		return (POLLERR | POLLHUP);
+		__mutex_unlock_sparse(&dev->lock);
+		return ((__force __poll_t)(POLLERR | POLLHUP));
 	}
 
 	/*
@@ -270,14 +282,14 @@ static unsigned int scull_p_poll(struct file *filp, poll_table *wait)
 	 * two are equal.
 	 */
 	if (dev->rp != dev->wp)
-		mask |= POLLIN | POLLRDNORM;
+		mask |= (__force __poll_t)(POLLIN | POLLRDNORM);
 	if (spacefree(dev))
-		mask |= POLLOUT | POLLWRNORM;
-	mutex_unlock(&dev->lock);
+		mask |= (__force __poll_t)(POLLOUT | POLLWRNORM);
+	__mutex_unlock_sparse(&dev->lock);
 	return (mask);
 }
 
-struct file_operations scull_pipe_fops = {
+static struct file_operations scull_pipe_fops = {
 	.owner = 	THIS_MODULE,
 	.llseek = 	no_llseek,
 	.read = 	scull_p_read,
