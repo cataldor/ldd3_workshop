@@ -6,7 +6,7 @@ on the original and martinezjavier's [1] updated source code.
 The objective of this repository is to try out some of the kernel features not
 explored in the aforementioned versions.
 
-These drivers were developed for Linux Kernel v5.7 and GCC 10.
+These drivers were developed for Linux Kernel v5.8 and GCC 10.
 
 The next headings details the changes made to the device drivers:
 
@@ -23,5 +23,15 @@ The following changes were made:
 * Procedure `scull_meminfo`;
 * Implemented 'proper' FIFO behavior for pipe nr `PROPER_FIFO_BEH_IDX`;
 * Support for the semantic parser sparse.
+
+
+## jit
+
+* Minor changes (const, testing other irq macros).
+
+## jiq
+
+* const, `from_tasklet`;
+* Avoid race condition with jitimer by using a flag.
 
 [1]: https://github.com/martinezjavier/ldd3
