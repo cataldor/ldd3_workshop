@@ -111,19 +111,17 @@ static struct scull_qset *__scull_follow(struct scull_dev *dev,
 
 	qset = dev->qset;
 	if (qset == NULL) {
-		qset = dev->qset = kmalloc(sizeof(*dev->qset), GFP_KERNEL);
+		qset = dev->qset = kcalloc(1, sizeof(*dev->qset), GFP_KERNEL);
 		if (qset == NULL)
 			return (NULL);
-		memset(qset, 0, sizeof(*dev->qset));
 	}
 
 	n = flw->qset_p;
 	while(n--) {
 		if (qset->next == NULL) {
-			qset->next = kmalloc(sizeof(*qset->next), GFP_KERNEL);
+			qset->next = kcalloc(1, sizeof(*qset->next), GFP_KERNEL);
 			if (qset->next == NULL)
 				return (NULL);
-			memset(qset->next, 0, sizeof(*qset->next));
 		}
 		qset = qset->next;
 	}
@@ -159,7 +157,7 @@ ssize_t scull_read(struct file *filp, char __user *buf, size_t count,
 {
 	struct	scull_dev 	*dev = filp->private_data;
 	struct	scull_qset	*qset;
-	struct	scull_follow	flw;
+	struct	scull_follow	 flw;
 	ssize_t	ssret = 0;
 
 	if (__mutex_lock_interruptible_sparse(&dev->lock))
@@ -196,7 +194,7 @@ ssize_t scull_write(struct file *filp, const char __user *buf, size_t count,
 {
 	struct	scull_dev 	*dev = filp->private_data;
 	struct	scull_qset 	*qset;
-	struct	scull_follow	flw;
+	struct	scull_follow	 flw;
 	ssize_t ssret = -ENOMEM;
 
 	if (__mutex_lock_interruptible_sparse(&dev->lock))
@@ -206,11 +204,10 @@ ssize_t scull_write(struct file *filp, const char __user *buf, size_t count,
 	if (qset == NULL)
 		goto out;
 	if (qset->data == NULL) {
-		qset->data = kmalloc(dev->qset_len * sizeof(*qset->data), 
+		qset->data = kcalloc(dev->qset_len, sizeof(*qset->data),
 				GFP_KERNEL);
 		if (qset->data == NULL)
 			goto out;
-		memset(qset->data, 0, dev->qset_len * sizeof(*qset->data));
 	}
 	if (qset->data[flw.quantum_p] == NULL) {
 		qset->data[flw.quantum_p] = kmalloc(dev->quantum_len, 
@@ -301,13 +298,12 @@ int scull_init_module(void)
 		return (ret);
 	}
 
-	scull_devices = kmalloc(scull_nr_devs * sizeof(*scull_devices), 
+	scull_devices = kcalloc(scull_nr_devs, sizeof(*scull_devices),
 			GFP_KERNEL);
 	if (scull_devices == NULL) {
 		ret = -ENOMEM;
 		goto fail;
 	}
-	memset(scull_devices, 0, scull_nr_devs * sizeof(*scull_devices));
 
 	/* initialize each device */
 	for (i = 0; i < scull_nr_devs; i++) {
