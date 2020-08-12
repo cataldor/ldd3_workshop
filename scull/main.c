@@ -142,12 +142,12 @@ static void __scull_meminfo(const struct scull_dev *dev)
 			continue;
 
 		tmem += dev->qset_len * sizeof(*qset->data);
+		mem += dev->len;
 		for (i = 0; i < dev->qset_len; i++) {
 			if (qset->data[i] == NULL)
 				break;
 			tmem += dev->quantum_len;
 			mem += sizeof(*qset->data);
-			mem += dev->len;
 		}
 	}
 	pr_debug("mem usage for qset %p: total [%zu] kb use [%zu] bytes\n", 

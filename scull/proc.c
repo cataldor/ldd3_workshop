@@ -25,10 +25,11 @@ static void *scull_seq_next(struct seq_file *s, void *v, loff_t *pos)
 static void __scull_print_ascii(struct seq_file *s, void *data, size_t data_len)
 {
 	const char *buf = (const char *)data;
+	const size_t max_loop = min(data_len, (size_t)500);
 	size_t i;
 
-	for (i = 0; i < (data_len / 30); i++) {
-		seq_printf(s, "%c", isalpha(*buf) ? *buf : '.');
+	for (i = 0; i < max_loop; i++) {
+		seq_printf(s, "%c", iscntrl(*buf) ? '.' : *buf);
 		buf++;
 		if ((i + 1) % 64 == 0)
 			seq_printf(s, "\n");
@@ -56,8 +57,7 @@ static int scull_seq_show(struct seq_file *s, void *v)
 					seq_printf(s, "    %4zd: %8p\n",
 							i, qset->data[i]);
 					__scull_print_ascii(s, qset->data[i],
-							dev->quantum_len * 
-							sizeof(*qset->data));
+							dev->len);
 
 				}
 			}
