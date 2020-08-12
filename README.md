@@ -12,7 +12,7 @@ The next headings details the changes made to the device drivers:
 
 ## scull
 
-This driver contains the scull + scullp driver functionality.
+This driver contains the scull + scullp + scullc driver functionality.
 
 The following changes were made:
 * Multiple C files (ioctl, pipe, proc);

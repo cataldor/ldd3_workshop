@@ -42,6 +42,7 @@ static struct file_operations scull_fops = {
 	/*.release =  scull_release,*/
 };
 
+static struct kmem_cache *kmc;
 /*
  * empty out scull device -> must be called with the device mutex held
  */
@@ -49,14 +50,12 @@ static void __scull_trim(struct scull_dev *dev)
 	__must_hold(&dev->lock)
 {
 	struct 	scull_qset	*qset, *next;
-	size_t	i;
 
 	lockdep_assert_held(&dev->lock);
 
 	for (qset = dev->qset; qset != NULL; qset = next) {
 		if (qset->data != NULL) {
-			for (i = 0; i < dev->qset_len; i++)
-				kfree(qset->data[i]);
+			kmem_cache_free_bulk(kmc, dev->qset_len - 1, qset->data);
 			kfree(qset->data);
 			qset->data = NULL;
 		}
@@ -210,8 +209,7 @@ ssize_t scull_write(struct file *filp, const char __user *buf, size_t count,
 			goto out;
 	}
 	if (qset->data[flw.quantum_p] == NULL) {
-		qset->data[flw.quantum_p] = kmalloc(dev->quantum_len, 
-				GFP_KERNEL);
+		qset->data[flw.quantum_p] = kmem_cache_alloc(kmc, GFP_KERNEL);
 		if (qset->data[flw.quantum_p] == NULL)
 			goto out;
 	}
@@ -255,6 +253,9 @@ void scull_cleanup_module(void)
 		cdev_del(&dev->cdev);
 	}
 	kfree(scull_devices);
+
+	if (kmc != NULL)
+		kmem_cache_destroy(kmc);
 final:
 	scull_remove_proc();
 
@@ -301,6 +302,13 @@ int scull_init_module(void)
 	scull_devices = kcalloc(scull_nr_devs, sizeof(*scull_devices),
 			GFP_KERNEL);
 	if (scull_devices == NULL) {
+		ret = -ENOMEM;
+		goto fail;
+	}
+
+	kmc = kmem_cache_create("scull_kmem", scull_quantum, 0,
+	    SLAB_HWCACHE_ALIGN | SLAB_RED_ZONE, NULL);
+	if (kmc == NULL) {
 		ret = -ENOMEM;
 		goto fail;
 	}
