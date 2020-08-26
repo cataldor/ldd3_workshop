@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
-#ifndef __HW_H_
-#define __HW_H__
+#ifndef __EDU_HW_H_
+#define __EDU_HW_H_
 
 #define EDU_VENDOR_ID	0x1234
 #define EDU_DEVICE_ID	0x11e8
@@ -26,6 +26,7 @@
 #define EDU_MAJOR_VERSION(val)	(val >> 24)
 #define EDU_MINOR_VERSION(val)	((val << 8) >> 24)
 #define EDU_IS_ID(val)	((val & 0x0000fffff) == 0x000000ed)
+
 struct edu_device {
 	u32	id;
 	void __iomem 	*io_base;
