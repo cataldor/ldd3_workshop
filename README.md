@@ -34,4 +34,9 @@ The following changes were made:
 * const, `from_tasklet`;
 * Avoid race condition with jitimer by using a flag.
 
+## edu
+
+Minimal driver for QEMU edu educational device [2].
+
 [1]: https://github.com/martinezjavier/ldd3
+[2]: https://github.com/qemu/qemu/blob/master/docs/specs/edu.txt
