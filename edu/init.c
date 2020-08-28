@@ -8,9 +8,12 @@
 #include <linux/pci.h>
 
 #include "hw.h"
+#include "sysfs.h"
 
 MODULE_LICENSE("GPL v2");
 MODULE_AUTHOR("Rodrigo Cataldo");
+
+struct pci_dev *edu_dev = NULL;
 
 static struct pci_device_id pci_ids[] = {
 	{ PCI_DEVICE(EDU_VENDOR_ID, EDU_DEVICE_ID), },
@@ -29,6 +32,7 @@ static void edu_remove(struct pci_dev *dev)
 	if (edu == NULL)
 		return;
 
+	edu_sysfs_remove_entries(edu);
 	pci_iounmap(dev, edu->io_base);	
 	pci_release_regions(dev);
 	pci_disable_device(dev);
@@ -45,6 +49,8 @@ static int edu_probe(struct pci_dev *dev, const struct pci_device_id *id)
 	if (edu == NULL)
 		return -ENOMEM;	
 
+	edu_dev = dev;
+	edu->pci_dev = dev;
 	ret = pci_enable_device(dev);
 	if (ret) {
 		dev_err(&dev->dev, "pci_enable_device\n");
@@ -92,6 +98,10 @@ static int edu_probe(struct pci_dev *dev, const struct pci_device_id *id)
 		dev_err(&dev->dev, "edu id check failed: %x\n", edu->id);
 		goto fail;
 	}
+
+	ret = edu_sysfs_create_entries(edu);
+	if (ret)
+		goto fail;
 
 	dev_info(&dev->dev, "[hw version %u.%u, dma mask %d len %llu mb]\n",
 	    EDU_MAJOR_VERSION(edu->id), EDU_MINOR_VERSION(edu->id),

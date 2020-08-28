@@ -3,7 +3,7 @@
 PROGNAME ?= edu
 
 ifneq ($(KERNELRELEASE),)
-	edu-objs := init.o
+	edu-objs := init.o sysfs.o
 	obj-m	:= edu.o
 
 
@@ -19,7 +19,7 @@ default:
 
 clean:
 	rm $(PROGNAME).ko $(PROGNAME).mod $(PROGNAME).mod.c $(PROGNAME).mod.o $(PROGNAME).o Module.symvers modules.order
-	rm init.o
+	rm init.o sysfs.o
 	rm .*.cmd
 
 endif

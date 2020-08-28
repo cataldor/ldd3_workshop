@@ -27,9 +27,11 @@
 #define EDU_MINOR_VERSION(val)	((val << 8) >> 24)
 #define EDU_IS_ID(val)	((val & 0x0000fffff) == 0x000000ed)
 
+extern struct pci_dev *edu_dev;
 struct edu_device {
 	u32	id;
 	void __iomem 	*io_base;
+	struct pci_dev *pci_dev;
 };
 
 #endif
