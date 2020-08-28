@@ -34,8 +34,13 @@ static void edu_remove(struct pci_dev *dev)
 
 	edu_sysfs_remove_entries(edu);
 	pci_iounmap(dev, edu->io_base);	
-	pci_release_regions(dev);
+	/*
+	 * pci.rst:
+	 * Conversely, drivers should call pci_release_region() AFTER
+	 * calling pci_disable_device().
+	 */
 	pci_disable_device(dev);
+	pci_release_regions(dev);
 	kfree(edu);
 }
 
@@ -112,10 +117,14 @@ static int edu_probe(struct pci_dev *dev, const struct pci_device_id *id)
 fail:
 	pci_iounmap(dev, edu->io_base);	
 fail_iomap:
+	/* see comment on edu_exit */
+	pci_disable_device(dev);
 	pci_release_regions(dev);
+fail_enable:
+	kfree(edu);
+	return ret;
 fail_request_region:
 	pci_disable_device(dev);
-fail_enable:
 	kfree(edu);
 	return ret;
 
