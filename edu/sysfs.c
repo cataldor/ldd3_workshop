@@ -11,10 +11,10 @@
 static ssize_t version_show(struct device_driver *dev, char *page)
 {
 	ssize_t size;
-	const struct edu_device *edu = pci_get_drvdata(edu_dev);
+	const struct qedu_device *edu = pci_get_drvdata(qedu_dev);
 
 	size = scnprintf(page, PAGE_SIZE, "major %u minor %u\n",
-	    EDU_MAJOR_VERSION(edu->id), EDU_MINOR_VERSION(edu->id));
+	    QEDU_MAJOR_VERSION(edu->id), QEDU_MINOR_VERSION(edu->id));
 	return size;
 }
 
@@ -24,9 +24,9 @@ static ssize_t inverse_show(struct device_driver *dev, char *page)
 {
 	ssize_t size;
 	u32 val;
-	const struct edu_device *edu = pci_get_drvdata(edu_dev);
+	const struct qedu_device *edu = pci_get_drvdata(qedu_dev);
 
-	val = readl(edu->io_base + EDU_INVERSE_REG);
+	val = readl(edu->io_base + QEDU_INVERSE_REG);
 	size = scnprintf(page, PAGE_SIZE, "%x\n", val);
 	return size;
 }
@@ -35,19 +35,19 @@ static ssize_t inverse_store(struct device_driver *dev, const char *page,
     size_t count)
 {
 	u64 val;
-	const struct edu_device *edu = pci_get_drvdata(edu_dev);
+	const struct qedu_device *edu = pci_get_drvdata(qedu_dev);
 
 	sscanf(page, "%llx", &val);
 	if (val > UINT_MAX)
 		return -EINVAL;
 
-	writel(val, edu->io_base + EDU_INVERSE_REG);
+	writel(val, edu->io_base + QEDU_INVERSE_REG);
 	return count;
 }
 
 static DRIVER_ATTR_RW(inverse);
 
-int edu_sysfs_create_entries(struct edu_device *edu)
+int qedu_sysfs_create_entries(struct qedu_device *edu)
 {
 	int ret;
 	struct device_driver *drv = &edu->pci_dev->driver->driver;
@@ -67,7 +67,7 @@ fail_version:
 	return ret;
 }
 
-void edu_sysfs_remove_entries(struct edu_device *edu)
+void qedu_sysfs_remove_entries(struct qedu_device *edu)
 {
 	struct device_driver *drv = &edu->pci_dev->driver->driver;
 

@@ -13,26 +13,26 @@
 MODULE_LICENSE("GPL v2");
 MODULE_AUTHOR("Rodrigo Cataldo");
 
-struct pci_dev *edu_dev = NULL;
+struct pci_dev *qedu_dev;
 
 static struct pci_device_id pci_ids[] = {
-	{ PCI_DEVICE(EDU_VENDOR_ID, EDU_DEVICE_ID), },
+	{ PCI_DEVICE(QEDU_VENDOR_ID, QEDU_DEVICE_ID), },
 	{ 0, },
 };
 
-static int edu_dma_mask = EDU_DEFAULT_DMA_MASK;
+static int edu_dma_mask = QEDU_DEFAULT_DMA_MASK;
 module_param(edu_dma_mask, int, 0644);
 MODULE_PARM_DESC(edu_dma_mask, "DMA address mask (default: 28 bits)");
 
-static void edu_remove(struct pci_dev *dev)
+static void qedu_remove(struct pci_dev *dev)
 {
-	struct edu_device *edu = pci_get_drvdata(dev);
+	struct qedu_device *edu = pci_get_drvdata(dev);
 
 	dev_dbg(&dev->dev, "edu_remove\n");
 	if (edu == NULL)
 		return;
 
-	edu_sysfs_remove_entries(edu);
+	qedu_sysfs_remove_entries(edu);
 	pci_iounmap(dev, edu->io_base);	
 	/*
 	 * pci.rst:
@@ -44,17 +44,17 @@ static void edu_remove(struct pci_dev *dev)
 	kfree(edu);
 }
 
-static int edu_probe(struct pci_dev *dev, const struct pci_device_id *id)
+static int qedu_probe(struct pci_dev *dev, const struct pci_device_id *id)
 {
 	int ret;
-	struct edu_device *edu;
+	struct qedu_device *edu;
 
-	dev_dbg(&dev->dev, "edu_probe\n");
+	dev_dbg(&dev->dev, "qedu_probe\n");
 	edu = kzalloc(sizeof(*edu), GFP_KERNEL);
 	if (edu == NULL)
 		return -ENOMEM;	
 
-	edu_dev = dev;
+	qedu_dev = dev;
 	edu->pci_dev = dev;
 	ret = pci_enable_device(dev);
 	if (ret) {
@@ -76,10 +76,10 @@ static int edu_probe(struct pci_dev *dev, const struct pci_device_id *id)
 	}
 
 	ret = pci_set_dma_mask(dev, DMA_BIT_MASK(edu_dma_mask));
-	if (ret && edu_dma_mask != EDU_DEFAULT_DMA_MASK) {
+	if (ret && edu_dma_mask != QEDU_DEFAULT_DMA_MASK) {
 		dev_err(&dev->dev, "dma mask %d bits rejected; using default",
 				edu_dma_mask);
-		edu_dma_mask = EDU_DEFAULT_DMA_MASK;
+		edu_dma_mask = QEDU_DEFAULT_DMA_MASK;
 		ret = pci_set_dma_mask(dev, DMA_BIT_MASK(edu_dma_mask));
 		if (ret) {
 			dev_err(&dev->dev, "pci_set_dma_mask\n");
@@ -98,18 +98,18 @@ static int edu_probe(struct pci_dev *dev, const struct pci_device_id *id)
 
 	/* XXX: setup interrupts, dma capabilities */
 
-	edu->id = readl(edu->io_base + EDU_MMIO_ID_REG);
-	if (!EDU_IS_ID(edu->id)) {
+	edu->id = readl(edu->io_base + QEDU_MMIO_ID_REG);
+	if (!QEDU_IS_ID(edu->id)) {
 		dev_err(&dev->dev, "edu id check failed: %x\n", edu->id);
 		goto fail;
 	}
 
-	ret = edu_sysfs_create_entries(edu);
+	ret = qedu_sysfs_create_entries(edu);
 	if (ret)
 		goto fail;
 
 	dev_info(&dev->dev, "[hw version %u.%u, dma mask %d len %llu mb]\n",
-	    EDU_MAJOR_VERSION(edu->id), EDU_MINOR_VERSION(edu->id),
+	    QEDU_MAJOR_VERSION(edu->id), QEDU_MINOR_VERSION(edu->id),
 	    edu_dma_mask, pci_resource_len(dev, 0)/1024/1024);
 
 	return 0;
@@ -122,19 +122,20 @@ fail_iomap:
 	pci_release_regions(dev);
 fail_enable:
 	kfree(edu);
+	qedu_dev = NULL;
 	return ret;
 fail_request_region:
 	pci_disable_device(dev);
 	kfree(edu);
+	qedu_dev = NULL;
 	return ret;
-
 }
 
 static struct pci_driver edu_driver = {
-	.name		= "edu_driver",
+	.name		= "qedu",
 	.id_table 	= pci_ids,
-	.probe		= edu_probe,
-	.remove		= edu_remove,
+	.probe		= qedu_probe,
+	.remove		= qedu_remove,
 };
 
 static int __init edu_init(void)
@@ -146,7 +147,6 @@ static void __exit edu_end(void)
 {
 	pci_unregister_driver(&edu_driver);
 }
-
 
 module_init(edu_init);
 module_exit(edu_end);
