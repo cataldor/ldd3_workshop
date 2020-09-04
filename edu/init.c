@@ -25,6 +25,9 @@ static struct pci_device_id pci_ids[] = {
 static int edu_dma_mask = QEDU_DEFAULT_DMA_MASK;
 module_param(edu_dma_mask, int, 0644);
 MODULE_PARM_DESC(edu_dma_mask, "DMA address mask (default: 28 bits)");
+static bool edu_use_msi = 1;
+module_param(edu_use_msi, bool, 0644);
+MODULE_PARM_DESC(edu_use_msi, "Use MSI for interrupts (default: 1)");
 
 static void __qedu_remove(struct pci_dev *dev, struct qedu_device *edu,
 		unsigned long *flags)
@@ -52,7 +55,9 @@ static void __qedu_remove(struct pci_dev *dev, struct qedu_device *edu,
 		spin_lock_irqsave(&edu->lock, *flags);
 	}
 
-	(void)free_irq(dev->irq, edu);
+	(void)free_irq(edu->irq, edu);
+	if (edu->use_msi)
+		pci_free_irq_vectors(dev);
 	pci_iounmap(dev, edu->io_base);	
 	/*
 	 * pci.rst:
@@ -138,8 +143,25 @@ static int qedu_probe(struct pci_dev *dev, const struct pci_device_id *id)
 	pci_set_drvdata(dev, edu);
 
 	/* XXX: setup msi, dma capabilities */
-	ret = request_threaded_irq(dev->irq, qedu_handle_irq,
-	    qedu_thr_handle_irq, IRQF_SHARED, "qedu", edu);
+	if (edu_use_msi) {
+		ret = pci_alloc_irq_vectors(dev, 1, 1, PCI_IRQ_MSI);
+		if (ret < 0) {
+			edu_use_msi = 0;
+			dev_err(&dev->dev, "pci_alloc_irq_vectors %d\n", ret);
+			edu->irq = dev->irq;
+		} else {
+			ret = pci_irq_vector(dev, 0);
+			if (ret < 0) {
+				dev_err(&dev->dev, "pci_irq_vector %d\n", ret);
+				goto fail_irq;
+			}
+			edu->irq = ret;
+		}
+	} else
+		edu->irq = dev->irq;
+
+	ret = request_threaded_irq(edu->irq, qedu_handle_irq,
+	    qedu_thr_handle_irq, (edu_use_msi ? 0 : IRQF_SHARED), "qedu", edu);
 	if (ret) {
 		dev_err(&dev->dev, "irq allocation failed\n");
 		goto fail_irq;
@@ -155,10 +177,11 @@ static int qedu_probe(struct pci_dev *dev, const struct pci_device_id *id)
 	if (ret)
 		goto fail;
 
-	dev_info(&dev->dev, "[hw version %u.%u, dma mask %d len %llu mb]\n",
+	dev_info(&dev->dev, "[hw v%u.%u, dma mask %d MSI %d len %llu mb]\n",
 	    QEDU_MAJOR_VERSION(edu->id), QEDU_MINOR_VERSION(edu->id),
-	    edu_dma_mask, pci_resource_len(dev, 0)/1024/1024);
+	    edu_dma_mask, edu_use_msi, pci_resource_len(dev, 0)/1024/1024);
 
+	edu->use_msi = edu_use_msi;
 	spin_unlock_irqrestore(&edu->lock, flags);
 	return 0;
 

@@ -56,7 +56,9 @@ struct qedu_device {
 	void __iomem 	*io_base;
 	struct pci_dev *pci_dev;
 	u32	id;
+	u32	irq;
 	unsigned long	state;
+	bool	use_msi;
 	struct timer_list timer;
 	wait_queue_head_t irq_q;
 };
