@@ -2,6 +2,8 @@
 #ifndef __QEDU_HW_H_
 #define __QEDU_HW_H_
 
+#include <linux/wait.h>
+#include <linux/timer.h>
 /*
  * EDU_ is taken by broadcast driver (brcmnand)
  * use QEDU_ instead.
@@ -27,18 +29,36 @@
 #define QEDU_DMA_COUNT_REG		0x90
 #define QEDU_DMA_CMD_REG		0x98
 
+/* for QEDU_STATUS_REG */
+#define QEDU_STATUS_REG_BUSY		0x01
+#define QEDU_STATUS_REG_IRQ_REQ		0x80
+
+/* for QEDU_DMA_CMD_REG */
+#define QEDU_DMA_CMD_IN_TRANSFER	0x01
+#define QEDU_DMA_CMD_IRQ_REQ		0x04
+
 #define QEDU_MAJOR_VERSION(val)	(val >> 24)
 #define QEDU_MINOR_VERSION(val)	((val << 8) >> 24)
 #define QEDU_IS_ID(val)	((val & 0xfffff) == 0x000ed)
 
+#define QEDU_STATE_IRQ_WAIT	0
+#define	QEDU_STATE_IRQ_OK	1
+#define	QEDU_STATE_IRQ_TIMEDOUT 2
+#define QEDU_STATE_SHUTDOWN	3
+
+#define QEDU_TIMER_TIMEOUT	(3*HZ)
 /*
  * used by edu/sysfs.c for driver private data.
  */
 extern struct pci_dev *qedu_dev;
 struct qedu_device {
-	u32	id;
+	spinlock_t	lock;
 	void __iomem 	*io_base;
 	struct pci_dev *pci_dev;
+	u32	id;
+	unsigned long	state;
+	struct timer_list timer;
+	wait_queue_head_t irq_q;
 };
 
 #endif

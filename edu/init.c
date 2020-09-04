@@ -7,7 +7,9 @@
 #include <linux/module.h>
 #include <linux/pci.h>
 
+#include "irq.h"
 #include "hw.h"
+#include "state.h"
 #include "sysfs.h"
 
 MODULE_LICENSE("GPL v2");
@@ -24,15 +26,33 @@ static int edu_dma_mask = QEDU_DEFAULT_DMA_MASK;
 module_param(edu_dma_mask, int, 0644);
 MODULE_PARM_DESC(edu_dma_mask, "DMA address mask (default: 28 bits)");
 
-static void qedu_remove(struct pci_dev *dev)
+static void __qedu_remove(struct pci_dev *dev, struct qedu_device *edu,
+		unsigned long *flags)
+	__must_hold(&edu->lock)
 {
-	struct qedu_device *edu = pci_get_drvdata(dev);
 
-	dev_dbg(&dev->dev, "edu_remove\n");
-	if (edu == NULL)
-		return;
+	lockdep_assert_held(&edu->lock);
+	/* let everyone know that we are shutting down */
+	set_bit(QEDU_STATE_SHUTDOWN, &edu->state);
+	spin_unlock_irqrestore(&edu->lock, *flags);
 
-	qedu_sysfs_remove_entries(edu);
+	/* cannot be holding the spinlock */
+	del_timer_sync(&edu->timer);
+
+	spin_lock_irqsave(&edu->lock, *flags);
+	if (!qedu_is_irq_done(edu))
+		dev_err(&dev->dev,
+		    "(i) timer was not set or (ii) IRQ scheduled while shutting down\n");
+
+	/* wait for after-process IRQ */
+	if (test_bit(QEDU_STATE_IRQ_WAIT, &edu->state)) {
+		spin_unlock_irqrestore(&edu->lock, *flags);
+		dev_info(&dev->dev, "waiting for IRQ process to finish\n");
+		wait_event_interruptible_timeout(edu->irq_q, 0, HZ);
+		spin_lock_irqsave(&edu->lock, *flags);
+	}
+
+	(void)free_irq(dev->irq, edu);
 	pci_iounmap(dev, edu->io_base);	
 	/*
 	 * pci.rst:
@@ -41,11 +61,28 @@ static void qedu_remove(struct pci_dev *dev)
 	 */
 	pci_disable_device(dev);
 	pci_release_regions(dev);
+}
+
+static void qedu_remove(struct pci_dev *dev)
+{
+	unsigned long flags;
+	struct qedu_device *edu = pci_get_drvdata(dev);
+
+	dev_dbg(&dev->dev, "edu_remove\n");
+	if (edu == NULL)
+		return;
+
+	/* remove userspace entry points */
+	qedu_sysfs_remove_entries(edu);
+	spin_lock_irqsave(&edu->lock, flags);
+	__qedu_remove(dev, edu, &flags);
+	spin_unlock_irqrestore(&edu->lock, flags);
 	kfree(edu);
 }
 
 static int qedu_probe(struct pci_dev *dev, const struct pci_device_id *id)
 {
+	unsigned long flags;
 	int ret;
 	struct qedu_device *edu;
 
@@ -54,6 +91,10 @@ static int qedu_probe(struct pci_dev *dev, const struct pci_device_id *id)
 	if (edu == NULL)
 		return -ENOMEM;	
 
+	spin_lock_init(&edu->lock);
+	spin_lock_irqsave(&edu->lock, flags);
+	init_waitqueue_head(&edu->irq_q);
+	timer_setup(&edu->timer, qedu_timeout, 0);
 	qedu_dev = dev;
 	edu->pci_dev = dev;
 	ret = pci_enable_device(dev);
@@ -96,7 +137,13 @@ static int qedu_probe(struct pci_dev *dev, const struct pci_device_id *id)
 	pci_set_master(dev);
 	pci_set_drvdata(dev, edu);
 
-	/* XXX: setup interrupts, dma capabilities */
+	/* XXX: setup msi, dma capabilities */
+	ret = request_threaded_irq(dev->irq, qedu_handle_irq,
+	    qedu_thr_handle_irq, IRQF_SHARED, "qedu", edu);
+	if (ret) {
+		dev_err(&dev->dev, "irq allocation failed\n");
+		goto fail_irq;
+	}
 
 	edu->id = readl(edu->io_base + QEDU_MMIO_ID_REG);
 	if (!QEDU_IS_ID(edu->id)) {
@@ -112,20 +159,28 @@ static int qedu_probe(struct pci_dev *dev, const struct pci_device_id *id)
 	    QEDU_MAJOR_VERSION(edu->id), QEDU_MINOR_VERSION(edu->id),
 	    edu_dma_mask, pci_resource_len(dev, 0)/1024/1024);
 
+	spin_unlock_irqrestore(&edu->lock, flags);
 	return 0;
 
 fail:
+	__qedu_remove(dev, edu, &flags);
+	goto end;
+
+fail_irq:
 	pci_iounmap(dev, edu->io_base);	
 fail_iomap:
-	/* see comment on edu_exit */
+	/* see comment on __qedmu_remove */
 	pci_disable_device(dev);
 	pci_release_regions(dev);
 fail_enable:
-	kfree(edu);
-	qedu_dev = NULL;
-	return ret;
+	goto end;
+
 fail_request_region:
 	pci_disable_device(dev);
+	goto end;
+
+end:
+	spin_unlock_irqrestore(&edu->lock, flags);
 	kfree(edu);
 	qedu_dev = NULL;
 	return ret;
