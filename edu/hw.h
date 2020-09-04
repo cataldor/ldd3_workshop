@@ -4,7 +4,7 @@
 
 /*
  * EDU_ is taken by broadcast driver (brcmnand)
- * use QEMU_ instead.
+ * use QEDU_ instead.
  */
 #define QEDU_VENDOR_ID	0x1234
 #define QEDU_DEVICE_ID	0x11e8
@@ -29,7 +29,7 @@
 
 #define QEDU_MAJOR_VERSION(val)	(val >> 24)
 #define QEDU_MINOR_VERSION(val)	((val << 8) >> 24)
-#define QEDU_IS_ID(val)	((val & 0x0000fffff) == 0x000000ed)
+#define QEDU_IS_ID(val)	((val & 0xfffff) == 0x000ed)
 
 /*
  * used by edu/sysfs.c for driver private data.
