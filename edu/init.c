@@ -28,6 +28,9 @@ MODULE_PARM_DESC(dma_mask, "DMA address mask bits (default: 28)");
 static bool use_msi = 1;
 module_param(use_msi, bool, 0644);
 MODULE_PARM_DESC(use_msi, "Use MSI for interrupts (default: 1)");
+static unsigned int timeout = 3*HZ;
+module_param(timeout, uint, 0644);
+MODULE_PARM_DESC(timeout, "Timeout for IRQ operations (multiple of HZ) (default: 3)");
 
 static void __qedu_remove(struct pci_dev *dev, struct qedu_device *edu,
 		unsigned long *flags)
@@ -102,6 +105,7 @@ static int qedu_probe(struct pci_dev *dev, const struct pci_device_id *id)
 	timer_setup(&edu->timer, qedu_timeout, 0);
 	qedu_dev = dev;
 	edu->pci_dev = dev;
+	edu->timeout = timeout * HZ;
 	ret = pci_enable_device(dev);
 	if (ret) {
 		dev_err(&dev->dev, "pci_enable_device\n");

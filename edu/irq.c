@@ -75,12 +75,14 @@ void qedu_timeout(struct timer_list *tl)
 	status = readl(edu->io_base + QEDU_STATUS_REG);
 	dma_status = readl(edu->io_base + QEDU_DMA_CMD_REG);
 	if (!__qedu_is_irq_set(status, dma_status)) {
-		dev_alert(&edu->pci_dev->dev, "[timeout] no IRQ bit set\n");
+		dev_alert(&edu->pci_dev->dev, "[timeout:%u] no IRQ bit set\n",
+		    edu->timeout/HZ);
 		goto set_timeout;
 	}
 	if (__qedu_is_busy_irq(status, dma_status)) {
-		dev_alert(&edu->pci_dev->dev, "[timeout] qedu is still busy\n");
-		mod_timer(&edu->timer, jiffies + QEDU_TIMER_TIMEOUT);
+		dev_alert(&edu->pci_dev->dev, "[timeout:%u] qedu is still busy\n",
+		    edu->timeout/HZ);
+		mod_timer(&edu->timer, jiffies + edu->timeout);
 		goto spin_unlock;
 	}
 

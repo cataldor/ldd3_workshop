@@ -36,7 +36,7 @@ static inline bool qedu_is_waiting_irq(const struct qedu_device *edu)
 static inline void qedu_set_waiting_irq(struct qedu_device *edu)
 {
 	set_bit(QEDU_STATE_IRQ_WAIT, &edu->state);
-	edu->timer.expires = jiffies + QEDU_TIMER_TIMEOUT;
+	edu->timer.expires = jiffies + edu->timeout;
 	add_timer(&edu->timer);
 }
 

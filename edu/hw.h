@@ -46,7 +46,6 @@
 #define	QEDU_STATE_IRQ_TIMEDOUT 2
 #define QEDU_STATE_SHUTDOWN	3
 
-#define QEDU_TIMER_TIMEOUT	(3*HZ)
 /*
  * used by edu/sysfs.c for driver private data.
  */
@@ -57,6 +56,7 @@ struct qedu_device {
 	struct pci_dev *pci_dev;
 	u32	id;
 	u32	irq;
+	u32	timeout;
 	unsigned long	state;
 	bool	use_msi;
 	struct timer_list timer;
