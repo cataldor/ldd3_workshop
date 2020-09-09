@@ -22,12 +22,12 @@ static struct pci_device_id pci_ids[] = {
 	{ 0, },
 };
 
-static int edu_dma_mask = QEDU_DEFAULT_DMA_MASK;
-module_param(edu_dma_mask, int, 0644);
-MODULE_PARM_DESC(edu_dma_mask, "DMA address mask (default: 28 bits)");
-static bool edu_use_msi = 1;
-module_param(edu_use_msi, bool, 0644);
-MODULE_PARM_DESC(edu_use_msi, "Use MSI for interrupts (default: 1)");
+static unsigned int dma_mask = QEDU_DEFAULT_DMA_MASK;
+module_param(dma_mask, uint, 0644);
+MODULE_PARM_DESC(dma_mask, "DMA address mask bits (default: 28)");
+static bool use_msi = 1;
+module_param(use_msi, bool, 0644);
+MODULE_PARM_DESC(use_msi, "Use MSI for interrupts (default: 1)");
 
 static void __qedu_remove(struct pci_dev *dev, struct qedu_device *edu,
 		unsigned long *flags)
@@ -121,19 +121,19 @@ static int qedu_probe(struct pci_dev *dev, const struct pci_device_id *id)
 		goto fail_iomap;
 	}
 
-	ret = pci_set_dma_mask(dev, DMA_BIT_MASK(edu_dma_mask));
-	if (ret && edu_dma_mask != QEDU_DEFAULT_DMA_MASK) {
+	ret = pci_set_dma_mask(dev, DMA_BIT_MASK(dma_mask));
+	if (ret && dma_mask != QEDU_DEFAULT_DMA_MASK) {
 		dev_err(&dev->dev, "dma mask %d bits rejected; using default",
-				edu_dma_mask);
-		edu_dma_mask = QEDU_DEFAULT_DMA_MASK;
-		ret = pci_set_dma_mask(dev, DMA_BIT_MASK(edu_dma_mask));
+				dma_mask);
+		dma_mask = QEDU_DEFAULT_DMA_MASK;
+		ret = pci_set_dma_mask(dev, DMA_BIT_MASK(dma_mask));
 		if (ret) {
 			dev_err(&dev->dev, "pci_set_dma_mask\n");
 			goto fail;
 		}
 	}
 
-	ret = pci_set_consistent_dma_mask(dev, DMA_BIT_MASK(edu_dma_mask));
+	ret = pci_set_consistent_dma_mask(dev, DMA_BIT_MASK(dma_mask));
 	if (ret) {
 		dev_err(&dev->dev, "pci_set_consistent_dma_mask\n");
 		goto fail;
@@ -143,10 +143,10 @@ static int qedu_probe(struct pci_dev *dev, const struct pci_device_id *id)
 	pci_set_drvdata(dev, edu);
 
 	/* XXX: setup msi, dma capabilities */
-	if (edu_use_msi) {
+	if (use_msi) {
 		ret = pci_alloc_irq_vectors(dev, 1, 1, PCI_IRQ_MSI);
 		if (ret < 0) {
-			edu_use_msi = 0;
+			use_msi = 0;
 			dev_err(&dev->dev, "pci_alloc_irq_vectors %d\n", ret);
 			edu->irq = dev->irq;
 		} else {
@@ -161,7 +161,7 @@ static int qedu_probe(struct pci_dev *dev, const struct pci_device_id *id)
 		edu->irq = dev->irq;
 
 	ret = request_threaded_irq(edu->irq, qedu_handle_irq,
-	    qedu_thr_handle_irq, (edu_use_msi ? 0 : IRQF_SHARED), "qedu", edu);
+	    qedu_thr_handle_irq, (use_msi ? 0 : IRQF_SHARED), "qedu", edu);
 	if (ret) {
 		dev_err(&dev->dev, "irq allocation failed\n");
 		goto fail_irq;
@@ -179,9 +179,9 @@ static int qedu_probe(struct pci_dev *dev, const struct pci_device_id *id)
 
 	dev_info(&dev->dev, "[hw v%u.%u, dma mask %d MSI %d len %llu mb]\n",
 	    QEDU_MAJOR_VERSION(edu->id), QEDU_MINOR_VERSION(edu->id),
-	    edu_dma_mask, edu_use_msi, pci_resource_len(dev, 0)/1024/1024);
+	    dma_mask, use_msi, pci_resource_len(dev, 0)/1024/1024);
 
-	edu->use_msi = edu_use_msi;
+	edu->use_msi = use_msi;
 	spin_unlock_irqrestore(&edu->lock, flags);
 	return 0;
 
