@@ -48,5 +48,15 @@ driver for QEMU edu educational device [2].
 - [ ] Factorial function (irq/irqless)
 - [ ] devm (i.e., managed resource API)
 
+## qus (QEMU usb mass storage driver) (WIP)
+
+driver for the QEMU usb mass storage driver [3]. This driver is for research
+only (Linux already supports the QEMU device via usb-storage.c).
+
+- [x] Initialization and termination
+- [ ] Control endpoint
+- [ ] fops
+
 [1]: https://github.com/martinezjavier/ldd3
 [2]: https://github.com/qemu/qemu/blob/master/docs/specs/edu.txt
+[3]: https://github.com/qemu/qemu/blob/master/hw/usb/dev-storage.c
