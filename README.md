@@ -34,9 +34,19 @@ The following changes were made:
 * const, `from_tasklet`;
 * Avoid race condition with jitimer by using a flag.
 
-## edu
+## edu (WIP)
 
-Minimal driver for QEMU edu educational device [2].
+driver for QEMU edu educational device [2].
+
+- [x] Initialization and termination
+- [x] Inverse function
+- [x] IRQ and MSI setup
+- [x] Timeout support for IRQ/MSI
+- [x] Test IRQ/MSI
+- [ ] DMA setup
+- [ ] Test DMA
+- [ ] Factorial function (irq/irqless)
+- [ ] devm (i.e., managed resource API)
 
 [1]: https://github.com/martinezjavier/ldd3
 [2]: https://github.com/qemu/qemu/blob/master/docs/specs/edu.txt
