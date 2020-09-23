@@ -5,6 +5,7 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/usb.h>
+#include <linux/usb/storage.h>
 
 MODULE_LICENSE("GPL v2");
 
@@ -45,6 +46,24 @@ static struct usb_class_driver qus_class = {
 	.minor_base = QUS_MINOR_BASE,
 };
 
+static int __test_control_endpoint(struct qemu_usb_storage *qus)
+{
+	int ret;
+	const unsigned int ifnum = qus->intf->cur_altsetting->desc.bInterfaceNumber;
+
+	/* Bulk-Only transport, p7, usb document */
+	ret = usb_control_msg(qus->dev, usb_rcvctrlpipe(qus->dev, 0),
+			US_BULK_GET_MAX_LUN,
+			USB_DIR_IN | USB_TYPE_CLASS | USB_RECIP_INTERFACE,
+			0, ifnum,
+			&qus->max_lun, 1, 1000);
+	if (ret < 0)
+		dev_err(&qus->dev->dev, "usb_control_msg %d\n", ret);
+	else
+		dev_info(&qus->dev->dev, "max lun: %u\n", qus->max_lun);
+	return ret;
+}
+
 
 static int qus_probe(struct usb_interface *intf, const struct usb_device_id *id)
 {
@@ -61,7 +80,6 @@ static int qus_probe(struct usb_interface *intf, const struct usb_device_id *id)
 	qus->dev = usb_get_dev(interface_to_usbdev(intf));
 	qus->intf = usb_get_intf(intf);
 
-	/* XXX: control endpoint */
 	/* interrupt endpoints not usually needed for mass storage */
 	ret = usb_find_common_endpoints(intf->cur_altsetting,
 	    &bulk_in, &bulk_out, NULL, NULL);
@@ -97,6 +115,8 @@ static int qus_probe(struct usb_interface *intf, const struct usb_device_id *id)
 
 	dev_info(&intf->dev, "qus%d: bulk size in %u out %u\n",
 	    intf->minor, usb_endpoint_maxp(bulk_in), usb_endpoint_maxp(bulk_out));
+
+	(void)__test_control_endpoint(qus);
 	return 0;
 error:
 	kref_put(&qus->kref, qus_del);

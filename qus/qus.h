@@ -12,5 +12,6 @@ struct qemu_usb_storage {
 	u8			 bulk_in_endpoint;
 	u8			 bulk_out_endpoint;
 	struct kref		 kref;
+	u32			 max_lun;
 };
 #endif

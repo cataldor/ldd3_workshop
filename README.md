@@ -54,7 +54,7 @@ driver for the QEMU usb mass storage driver [3]. This driver is for research
 only (Linux already supports the QEMU device via usb-storage.c).
 
 - [x] Initialization and termination
-- [ ] Control endpoint
+- [x] Control endpoint
 - [ ] fops
 
 [1]: https://github.com/martinezjavier/ldd3
