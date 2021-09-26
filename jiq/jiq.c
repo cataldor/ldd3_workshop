@@ -79,6 +79,7 @@ static int jiq_print(struct clientdata *data)
 
 	if (len > LIMIT) {
 		WRITE_ONCE(data->end, 1);
+		/* a full memory barrier is used for wake up */
 		wake_up_interruptible(&jiq_wait);
 		return (0);
 	}
@@ -105,8 +106,8 @@ static int jiq_print(struct clientdata *data)
  */
 static void jiq_print_wq(struct work_struct *work)
 {
-	struct clientdata *data = container_of(work,
-					struct clientdata, jiq_work);
+	struct clientdata *data = container_of(work, struct clientdata,
+					jiq_work);
 
 	if (!jiq_print(data))
 		return;
