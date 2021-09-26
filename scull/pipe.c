@@ -326,8 +326,8 @@ int scull_p_init(dev_t firstdev)
 	}
 
 	scull_p_dev = firstdev;
-	scull_p_devices = kmalloc(scull_p_nr_devs * sizeof(*scull_p_devices),
-			GFP_KERNEL);
+	scull_p_devices = kmalloc_array(scull_p_nr_devs,
+			sizeof(*scull_p_devices), GFP_KERNEL);
 	if (scull_p_devices == NULL) {
 		unregister_chrdev_region(firstdev, scull_p_nr_devs);
 		return (0);
