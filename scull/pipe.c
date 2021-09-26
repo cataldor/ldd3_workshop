@@ -198,8 +198,9 @@ static int scull_getwritespace(struct scull_pipe *dev, struct file *filp)
 	pr_notice("%s %lu %lu\n", current->comm, dev->rp - dev->buf,
 	    dev->wp - dev->buf);
 	lockdep_assert_held(&dev->lock);
-	__acquire(&dev->lock);
 
+	/* balance lock for sparse */
+	__acquire(&dev->lock);
 	while (spacefree(dev) == 0) {
 		DEFINE_WAIT(wait);
 
