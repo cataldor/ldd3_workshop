@@ -171,10 +171,10 @@ static ssize_t scull_p_read(struct file *filp, char __user *buf, size_t count,
 	}
 	/* ok data available */
 	if (dev->wp > dev->rp)
-		count = min(count, (size_t)(dev->wp - dev->rp));
+		count = min_t(size_t, count, dev->wp - dev->rp);
 	/* write pointer has wrapped */
 	else
-		count = min(count, (size_t)(dev->end - dev->rp));
+		count = min_t(size_t, count, dev->end - dev->rp);
 
 	if (copy_to_user(buf, dev->rp, count)) {
 		__mutex_unlock_sparse(&dev->lock);
@@ -240,11 +240,11 @@ static ssize_t scull_p_write(struct file *filp, const char __user *buf,
 		return (ret);
 	}
 
-	count = min(count, (size_t)spacefree(dev));
+	count = min_t(size_t, count, spacefree(dev));
 	if (dev->wp >= dev->rp)
-		count = min(count, (size_t)(dev->end - dev->wp));
+		count = min_t(size_t, count, dev->end - dev->wp);
 	else
-		count = min(count, (size_t)(dev->rp - dev->wp - 1));
+		count = min_t(size_t, count, dev->rp - dev->wp - 1);
 	if  (copy_from_user(dev->wp, buf, count)) {
 		__mutex_unlock_sparse(&dev->lock);
 		return (-EFAULT);
